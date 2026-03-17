@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.ProductName}} 安全审计报告</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1a1a2e;
+  background: #f0f2f5;
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+/* ── Header ── */
+.report-header {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+  border-radius: 12px;
+  padding: 32px 40px;
+  margin-bottom: 28px;
+  color: #fff;
+}
+.report-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.report-header .subtitle {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+.report-header .version {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 12px;
+  color: #64748b;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 2px 12px;
+}
+
+/* ── Risk summary bar ── */
+.summary-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.summary-card {
+  border-radius: 10px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.summary-card.critical { background: #fef2f2; border: 1px solid #fecaca; }
+.summary-card.warn     { background: #fff7ed; border: 1px solid #fed7aa; }
+.summary-card.info     { background: #eff6ff; border: 1px solid #bfdbfe; }
+.summary-card .num { font-size: 36px; font-weight: 700; line-height: 1; }
+.summary-card.critical .num { color: #dc2626; }
+.summary-card.warn     .num { color: #ea580c; }
+.summary-card.info     .num { color: #2563eb; }
+.summary-card .desc .label { font-size: 13px; font-weight: 600; color: #374151; }
+.summary-card .desc .hint  { font-size: 12px; color: #9ca3af; }
+
+/* ── Section ── */
+.section {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+.section-header .icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.icon-host     { background: #eff6ff; }
+.icon-openclaw { background: #f0fdf4; }
+.icon-channel  { background: #fdf4ff; }
+.icon-model    { background: #fff7ed; }
+.icon-attack   { background: #fef2f2; }
+.icon-risk     { background: #fefce8; }
+.section-header h2 { font-size: 15px; font-weight: 600; color: #111827; }
+.section-body { padding: 20px 24px; }
+
+/* ── Not-installed notice inside section ── */
+.not-installed-notice {
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* ── Info grid ── */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+.info-field .field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 3px;
+}
+.info-field .field-value {
+  font-size: 14px;
+  color: #111827;
+  word-break: break-all;
+}
+.exists-yes { color: #16a34a; font-size: 12px; }
+.exists-no  { color: #9ca3af; font-size: 12px; }
+
+/* ── Table ── */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table thead tr { background: #f9fafb; }
+.data-table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover td { background: #f9fafb; }
+
+/* ── Badges ── */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-on  { background: #dcfce7; color: #15803d; }
+.badge-off { background: #f3f4f6; color: #6b7280; }
+
+/* ── Risk severity ── */
+.sev {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sev-critical { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.sev-warn     { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
+.sev-info     { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.row-critical td { background: #fff5f5; }
+.row-warn     td { background: #fffaf5; }
+.row-info     td { background: #f5f9ff; }
+
+/* ── Empty row ── */
+.empty-row td {
+  text-align: center;
+  color: #9ca3af;
+  font-style: italic;
+  padding: 24px;
+}
+
+/* ── Audit unavailable ── */
+.audit-notice {
+  padding: 14px 18px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 13px;
+}
+
+/* ── Footer ── */
+.report-footer {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 12px;
+  margin-top: 40px;
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header：只保留标题 + 版本 -->
+  <div class="report-header">
+    <h1>{{.ProductName}} 安全审计报告</h1>
+    <div class="subtitle">OpenClaw 运行环境安全分析</div>
+    <span class="version">v{{.Version}}</span>
+  </div>
+
+  <!-- 风险统计 -->
+  <div class="summary-bar">
+    <div class="summary-card critical">
+      <div class="num">{{.CriticalCount}}</div>
+      <div class="desc"><div class="label">严重风险</div><div class="hint">Critical</div></div>
+    </div>
+    <div class="summary-card warn">
+      <div class="num">{{.WarningCount}}</div>
+      <div class="desc"><div class="label">警告风险</div><div class="hint">Warn</div></div>
+    </div>
+    <div class="summary-card info">
+      <div class="num">{{.InfoCount}}</div>
+      <div class="desc"><div class="label">提示信息</div><div class="hint">Info</div></div>
+    </div>
+  </div>
+
+  <!-- 1. 主机信息 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon icon-host">🖥</div>
+      <h2>主机信息</h2>
+    </div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-field">
+          <div class="field-label">主机名</div>
+          <div class="field-value">{{.Result.Hostname}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">操作系统</div>
+          <div class="field-value">{{.Result.OS}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">CPU 架构</div>
+          <div class="field-value">{{.Result.Arch}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">扫描时间</div>
+          <div class="field-value">{{.Result.ScanTime.Format "2006-01-02 15:04:05"}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. OpenClaw 信息（始终显示，未安装时展示本地残留） -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon icon-openclaw">⚙️</div>
+      <h2>OpenClaw 信息</h2>
+    </div>
+    <div class="section-body">
+      {{if not .OpenClawInfo.Installed}}
+      <div class="not-installed-notice">
+        ⚠️ 未检测到 OpenClaw 配置文件（openclaw.json），以下为本地路径扫描结果。
+      </div><br>
+      {{end}}
+      <div class="info-grid">
+        <div class="info-field">
+          <div class="field-label">主目录</div>
+          <div class="field-value">
+            {{.OpenClawInfo.HomeDir}}<br>
+            {{if .OpenClawInfo.HomeExists}}<span class="exists-yes">✓ 目录存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
+          </div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">配置文件</div>
+          <div class="field-value">
+            {{.OpenClawInfo.ConfigPath}}<br>
+            {{if .OpenClawInfo.ConfigExists}}<span class="exists-yes">✓ 文件存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
+          </div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">工作目录</div>
+          <div class="field-value">
+            {{.OpenClawInfo.Workspace}}<br>
+            {{if .OpenClawInfo.WorkspaceExists}}<span class="exists-yes">✓ 目录存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
+          </div>
+        </div>
+        {{if .OpenClawInfo.Installed}}
+        <div class="info-field">
+          <div class="field-label">OpenClaw 版本</div>
+          <div class="field-value">{{if .OpenClawInfo.Version}}{{.OpenClawInfo.Version}}{{else}}—{{end}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">网关 IP</div>
+          <div class="field-value">{{.OpenClawInfo.IP}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">端口</div>
+          <div class="field-value">{{.OpenClawInfo.Port}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">监听地址</div>
+          <div class="field-value">{{if .OpenClawInfo.Bind}}{{.OpenClawInfo.Bind}}{{else}}—{{end}}</div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+  </div>
+
+  {{if .OpenClawInfo.Installed}}
+
+  <!-- 3. Channels -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon icon-channel">💬</div>
+      <h2>消息渠道（Channels）</h2>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>渠道</th><th>状态</th><th>私聊白名单</th><th>群聊白名单</th></tr>
+      </thead>
+      <tbody>
+        {{if .Channels}}
+          {{range .Channels}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td>
+              {{if .Enabled}}<span class="badge badge-on">启用</span>
+              {{else}}<span class="badge badge-off">禁用</span>{{end}}
+            </td>
+            <td>{{if .PrivateAllowlist}}{{joinStrings .PrivateAllowlist}}{{else}}—{{end}}</td>
+            <td>{{if .GroupAllowlist}}{{joinStrings .GroupAllowlist}}{{else}}—{{end}}</td>
+          </tr>
+          {{end}}
+        {{else}}
+          <tr class="empty-row"><td colspan="4">暂无渠道配置</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 4. Models -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon icon-model">🤖</div>
+      <h2>模型配置（Models）</h2>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>模型提供方</th><th>模型 URL</th><th>模型列表</th></tr>
+      </thead>
+      <tbody>
+        {{if .Models}}
+          {{range .Models}}
+          <tr>
+            <td>{{.Provider}}</td>
+            <td>{{if .BaseURL}}{{.BaseURL}}{{else}}—{{end}}</td>
+            <td>{{if .Models}}{{joinStrings .Models}}{{else}}—{{end}}</td>
+          </tr>
+          {{end}}
+        {{else}}
+          <tr class="empty-row"><td colspan="3">暂无模型配置</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 5. 攻击面 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon icon-attack">🎯</div>
+      <h2>攻击面分析</h2>
+    </div>
+    {{if .AuditError}}
+    <div class="section-body">
+      <div class="audit-notice">⚠️ 审计命令未执行或输出解析失败，攻击面数据不可用。</div>
+    </div>
+    {{else}}
+    <table class="data-table">
+      <thead>
+        <tr><th>项目</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+        {{if .AttackSurfaces}}
+          {{range .AttackSurfaces}}
+          <tr><td>{{.Item}}</td><td>{{.Status}}</td></tr>
+          {{end}}
+        {{else}}
+          <tr class="empty-row"><td colspan="2">无攻击面数据</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{end}}
+  </div>
+
+  <!-- 6. 风险列表 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon icon-risk">⚠️</div>
+      <h2>风险列表</h2>
+    </div>
+    {{if .AuditError}}
+    <div class="section-body">
+      <div class="audit-notice">⚠️ 审计命令未执行或输出解析失败，风险数据不可用。</div>
+    </div>
+    {{else}}
+    <table class="data-table">
+      <thead>
+        <tr><th>等级</th><th>检查项</th><th>标题</th><th>描述</th><th>修复建议</th></tr>
+      </thead>
+      <tbody>
+        {{if .RiskFindings}}
+          {{range .RiskFindings}}
+          <tr class="row-{{.Severity}}">
+            <td><span class="sev sev-{{.Severity}}">{{.Severity}}</span></td>
+            <td>{{.CheckID}}</td>
+            <td>{{.Title}}</td>
+            <td>{{.Detail}}</td>
+            <td>{{.Remediation}}</td>
+          </tr>
+          {{end}}
+        {{else}}
+          <tr class="empty-row"><td colspan="5">未发现 critical / warn 级风险项</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{end}}
+  </div>
+
+  {{else}}
+  <!-- OpenClaw 未安装，跳过后续区块 -->
+  <div class="section">
+    <div class="section-body">
+      <div class="not-installed-notice">
+        OpenClaw 未安装
+      </div>
+    </div>
+  </div>
+  {{end}}
+
+  <div class="report-footer">
+    由 {{.ProductName}} v{{.Version}} 生成 · {{.Result.ScanTime.Format "2006-01-02 15:04:05"}}
+  </div>
+
+</div>
+</body>
+</html>
