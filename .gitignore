@@ -1,8 +1,8 @@
 # ── 构建产物 ──────────────────────────────────────
 /build/
 /dist/
-clawscan
-clawscan.exe
+/clawscan
+/clawscan.exe
 clawscan-*
 
 # ── 报告输出 ──────────────────────────────────────
