@@ -3,6 +3,7 @@ package audit
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -63,6 +64,13 @@ func parseAttackSurface(rawKey, rawValue string) []models.AttackSurface {
 		}
 		return []models.AttackSurface{{Item: "高权限工具", Status: display, StatusClass: class}}
 
+	case "hooks":
+		class, display := "green", "未启用"
+		if value == "enabled" {
+			class, display = "yellow", "启用"
+		}
+		return []models.AttackSurface{{Item: "Hooks", Status: display, StatusClass: class}}
+
 	case "hooks.webhooks":
 		class, display := "green", "未启用"
 		if value == "enabled" {
@@ -101,7 +109,11 @@ func parseAttackSurface(rawKey, rawValue string) []models.AttackSurface {
 func RunAudit() (*models.AuditResult, error) {
 	out, err := exec.Command("openclaw", "security", "audit", "--deep", "--json").Output()
 	if err != nil {
-		return nil, fmt.Errorf("openclaw security audit 执行失败: %w", err)
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("openclaw security audit 执行失败: %w", err)
+		}
+		// 非零退出码（如发现 critical 问题时）仍可包含有效 JSON，继续解析
 	}
 
 	start := bytes.IndexByte(out, '{')

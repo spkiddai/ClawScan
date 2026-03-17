@@ -13,7 +13,6 @@ func TestWriteHTMLIncludesGroupedFindingsAndIssues(t *testing.T) {
 	result := &models.ScanResult{
 		Hostname: "host-1",
 		OS:       "linux",
-		Arch:     "amd64",
 		ScanTime: time.Date(2026, 3, 15, 10, 30, 0, 0, time.UTC),
 		Issues: []models.ScanIssue{
 			{Check: "services", Error: "launchctl 不可用"},

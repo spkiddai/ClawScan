@@ -326,6 +326,10 @@ body {
       {{if not .OpenClawInfo.Installed}}
       <div class="not-installed-notice" style="margin-bottom:16px;">OpenClaw 未安装</div>
       <div class="info-grid">
+        <div class="info-field">
+          <div class="field-label">安装状态</div>
+          <div class="field-value"><span class="badge badge-off">未安装</span></div>
+        </div>
         {{if .OpenClawInfo.HomeDir}}
         <div class="info-field">
           <div class="field-label">主目录</div>
@@ -350,15 +354,21 @@ body {
         </div>
         {{end}}
         {{end}}
-        {{if .OpenClawInfo.AgentsDir}}
+        {{if .OpenClawInfo.AgentSessionCount}}
         <div class="info-field">
-          <div class="field-label">Agent 会话目录</div>
-          <div class="field-value">{{if .OpenClawInfo.AgentsDir}}{{.OpenClawInfo.AgentsDir}}{{else}}不存在{{end}}<br>会话数: {{.OpenClawInfo.AgentSessionCount}}</div>
+          <div class="field-label">Agent 会话数</div>
+          <div class="field-value">{{.OpenClawInfo.AgentSessionCount}}</div>
         </div>
         {{end}}
       </div>
       {{else}}
       <div class="info-grid">
+        <div class="info-field">
+          <div class="field-label">安装状态</div>
+          <div class="field-value">
+            {{if .OpenClawInfo.Installed}}<span class="badge badge-on">已安装</span>{{else}}<span class="badge badge-off">未安装</span>{{end}}
+          </div>
+        </div>
         <div class="info-field">
           <div class="field-label">运行状态</div>
           <div class="field-value">
@@ -378,16 +388,12 @@ body {
           <div class="field-value">{{.OpenClawInfo.Port}}</div>
         </div>
         <div class="info-field">
-          <div class="field-label">监听模式（Bind）</div>
+          <div class="field-label">监听模式</div>
           <div class="field-value">{{if .OpenClawInfo.Bind}}{{if eq .OpenClawInfo.Bind "loopback"}}<span class="as-green">{{.OpenClawInfo.Bind}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.Bind}}</span>{{end}}{{else}}—{{end}}</div>
         </div>
         <div class="info-field">
           <div class="field-label">网关认证方式</div>
           <div class="field-value">{{if .OpenClawInfo.AuthMode}}{{if eq .OpenClawInfo.AuthMode "token"}}<span class="as-green">{{.OpenClawInfo.AuthMode}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.AuthMode}}</span>{{end}}{{else}}—{{end}}</div>
-        </div>
-        <div class="info-field">
-          <div class="field-label">网关认证 Token</div>
-          <div class="field-value">{{if .OpenClawInfo.AuthToken}}{{.OpenClawInfo.AuthToken}}{{else}}—{{end}}</div>
         </div>
         <div class="info-field">
           <div class="field-label">主目录</div>
@@ -410,8 +416,8 @@ body {
         </div>
         {{end}}
         <div class="info-field">
-          <div class="field-label">Agent 会话目录</div>
-          <div class="field-value">{{if .OpenClawInfo.AgentsDir}}{{.OpenClawInfo.AgentsDir}}{{else}}不存在{{end}}<br>会话数: {{.OpenClawInfo.AgentSessionCount}}</div>
+          <div class="field-label">Agent 会话数</div>
+          <div class="field-value">{{.OpenClawInfo.AgentSessionCount}}</div>
         </div>
       </div>
       {{end}}
@@ -428,7 +434,7 @@ body {
     </div>
     <table class="data-table">
       <thead>
-        <tr><th>渠道</th><th>状态</th><th>私聊白名单</th><th>群聊白名单</th></tr>
+        <tr><th>渠道</th><th>状态</th><th>私聊白名单数</th><th>群聊白名单数</th></tr>
       </thead>
       <tbody>
         {{if .Channels}}
@@ -439,8 +445,8 @@ body {
               {{if .Enabled}}<span class="badge badge-on">启用</span>
               {{else}}<span class="badge badge-off">禁用</span>{{end}}
             </td>
-            <td>{{if .PrivateAllowlist}}{{joinStrings .PrivateAllowlist}}{{else}}—{{end}}</td>
-            <td>{{if .GroupAllowlist}}{{joinStrings .GroupAllowlist}}{{else}}—{{end}}</td>
+            <td>{{.PrivateAllowlistCount}}</td>
+            <td>{{if eq .GroupPolicy "disabled"}}<span class="as-green">群聊策略未开启</span>{{else}}{{.GroupAllowlistCount}}{{end}}</td>
           </tr>
           {{end}}
         {{else}}
@@ -476,7 +482,34 @@ body {
     </table>
   </div>
 
-  <!-- 5. 攻击面 -->
+  <!-- 5. 技能配置 -->
+  <div class="section">
+    <div class="section-header">
+      <div class="icon icon-channel">🧩</div>
+      <h2>技能配置（Skills）</h2>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>技能名称</th><th>是否启用</th><th>允许加载</th><th>技能来源</th></tr>
+      </thead>
+      <tbody>
+        {{if .Skills}}
+          {{range .Skills}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td>{{if .Disabled}}<span class="badge badge-off">已禁用</span>{{else}}<span class="badge badge-on">未禁用</span>{{end}}</td>
+            <td>{{if .BlockedByAllowlist}}<span class="as-yellow">禁止</span>{{else}}<span class="as-green">允许</span>{{end}}</td>
+            <td>{{if .Source}}{{.Source}}{{else}}—{{end}}</td>
+          </tr>
+          {{end}}
+        {{else}}
+          <tr class="empty-row"><td colspan="4">暂无技能数据</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 6. 攻击面 -->
   <div class="section">
     <div class="section-header">
       <div class="icon icon-attack">🎯</div>
@@ -507,7 +540,7 @@ body {
     {{end}}
   </div>
 
-  <!-- 6. 风险列表 -->
+  <!-- 7. 风险列表 -->
   <div class="section">
     <div class="section-header">
       <div class="icon icon-risk">⚠️</div>

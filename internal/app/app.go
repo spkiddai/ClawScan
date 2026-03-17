@@ -108,7 +108,6 @@ func runScan(plat platform.Platform, openclawHome string) *models.ScanResult {
 	result := &models.ScanResult{
 		Hostname: hostname,
 		OS:       runtime.GOOS,
-		Arch:     runtime.GOARCH,
 		ScanTime: time.Now(),
 	}
 
@@ -129,6 +128,8 @@ func runScan(plat platform.Platform, openclawHome string) *models.ScanResult {
 	result.Models = models
 
 	if info != nil && info.Installed {
+		result.Skills = collector.CollectSkills()
+
 		auditResult, err := audit.RunAudit()
 		if err != nil {
 			result.AddIssue("audit", err)

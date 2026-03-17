@@ -38,6 +38,7 @@ type TemplateData struct {
 	OpenClawInfo   *models.OpenClawInfo // always non-nil
 	Channels       []models.Channel
 	Models         []models.ModelProvider
+	Skills         []models.Skill
 	AttackSurfaces []models.AttackSurface
 	RiskFindings   []models.AuditFinding
 	AuditError     bool
@@ -57,6 +58,7 @@ func NewTemplateData(result *models.ScanResult, version string) *TemplateData {
 		OpenClawInfo: openClawInfo,
 		Channels:     result.Channels,
 		Models:       result.Models,
+		Skills:       result.Skills,
 	}
 
 	if result.AuditResult == nil {
