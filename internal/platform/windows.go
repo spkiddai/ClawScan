@@ -67,28 +67,6 @@ func findAllUserHomeDirs() []string {
 	return homes
 }
 
-func (p *windowsPlatform) FindProcesses() ([]ProcessInfo, error) {
-	return FindProcesses()
-}
-
-func (p *windowsPlatform) FindServices() ([]ServiceInfo, error) {
-	var services []ServiceInfo
-
-	serviceNames := []string{"OpenClaw", "OpenClawGateway"}
-	for _, name := range serviceNames {
-		out, err := exec.Command("sc", "query", name).Output()
-		if err != nil {
-			continue
-		}
-		output := string(out)
-		if strings.Contains(output, name) {
-			active := strings.Contains(output, "RUNNING")
-			services = append(services, ServiceInfo{Name: name, Active: active})
-		}
-	}
-	return services, nil
-}
-
 func (p *windowsPlatform) OpenBrowser(url string) error {
 	return exec.Command("cmd", "/c", "start", url).Start()
 }

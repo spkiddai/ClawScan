@@ -16,7 +16,6 @@ import (
 	"github.com/spkiddai/clawscan/internal/browser"
 	"github.com/spkiddai/clawscan/internal/collector"
 	"github.com/spkiddai/clawscan/internal/models"
-	"github.com/spkiddai/clawscan/internal/parser"
 	"github.com/spkiddai/clawscan/internal/platform"
 	"github.com/spkiddai/clawscan/internal/report"
 )
@@ -65,12 +64,12 @@ func Run(args []string, stdout, stderr io.Writer, cfg Config) int {
 	result := runScan(plat, opts.openclawHome)
 
 	if !opts.quiet {
-		printFindings(stdout, result, color)
+		printScanDone(stdout, result, color)
 		printIssues(stderr, result, color)
 	}
 
 	if !opts.shouldWriteReport() {
-		return int(result.MaxSeverity)
+		return 0
 	}
 
 	outputPath := opts.output
@@ -101,10 +100,18 @@ func Run(args []string, stdout, stderr io.Writer, cfg Config) int {
 		}
 	}
 
-	return int(result.MaxSeverity)
+	return 0
 }
 
 func runScan(plat platform.Platform, openclawHome string) *models.ScanResult {
+	hostname, _ := os.Hostname()
+	result := &models.ScanResult{
+		Hostname: hostname,
+		OS:       runtime.GOOS,
+		Arch:     runtime.GOARCH,
+		ScanTime: time.Now(),
+	}
+
 	homeDir := openclawHome
 	if homeDir == "" {
 		if env := os.Getenv("OPENCLAW_HOME"); env != "" {
@@ -114,67 +121,20 @@ func runScan(plat platform.Platform, openclawHome string) *models.ScanResult {
 		}
 	}
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown"
-	}
-
-	result := &models.ScanResult{
-		Hostname: hostname,
-		OS:       runtime.GOOS,
-		Arch:     runtime.GOARCH,
-		ScanTime: time.Now(),
-	}
-
-	if findings, err := collector.ScanFilesystem(homeDir); err != nil {
-		result.AddIssue("filesystem", err)
-	} else {
-		result.AddFindings(findings)
-	}
-
-	if findings, err := collector.ScanProcesses(plat); err != nil {
-		result.AddIssue("processes", err)
-	} else {
-		result.AddFindings(findings)
-	}
-
-	if findings, err := collector.ScanServices(plat); err != nil {
-		result.AddIssue("services", err)
-	} else {
-		result.AddFindings(findings)
-	}
-
-	if findings, err := parser.ScanConfig(homeDir); err != nil {
-		result.AddIssue("config", err)
-	} else {
-		result.AddFindings(findings)
-	}
-
-	if findings, err := collector.ScanCredentials(homeDir); err != nil {
-		result.AddIssue("credentials", err)
-	} else {
-		result.AddFindings(findings)
-	}
-
-	if findings, err := collector.ScanNetwork(nil); err != nil {
-		result.AddIssue("network", err)
-	} else {
-		result.AddFindings(findings)
-	}
-
-	info, channels, modelProviders := collector.CollectOpenClawInfo(homeDir)
+	info, channels, models := collector.CollectOpenClawInfo(homeDir)
 	result.OpenClawInfo = info
 	result.Channels = channels
-	result.Models = modelProviders
+	result.Models = models
 
-	auditResult, err := audit.RunAudit()
-	if err != nil {
-		result.AddIssue("audit", err)
-	} else {
-		result.AuditResult = auditResult
+	if info != nil && info.Installed {
+		auditResult, err := audit.RunAudit()
+		if err != nil {
+			result.AddIssue("audit", err)
+		} else {
+			result.AuditResult = auditResult
+		}
 	}
 
-	result.Finalize()
 	return result
 }
 
@@ -258,43 +218,33 @@ func openReportInBrowser(plat platform.Platform, path string) error {
 
 const separator = "────────────────────────────────────────"
 
-func printFindings(w io.Writer, result *models.ScanResult, color bool) {
-	if len(result.Findings) == 0 {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, colorize("  [安全] 未检测到 OpenClaw 安装。", colorBoldGreen, color))
-		fmt.Fprintln(w)
-		return
-	}
-
+func printScanDone(w io.Writer, result *models.ScanResult, color bool) {
 	fmt.Fprintln(w)
-	for _, finding := range result.Findings {
-		icon, tagColor := severityStyle(finding.Severity)
-		tag := colorize(fmt.Sprintf(" %s ", finding.Severity), tagColor, color)
-		fmt.Fprintf(w, "  %s %s  %s\n", icon, tag, finding.Title)
-		fmt.Fprintf(w, "      %s\n", colorize(finding.Description, colorGray, color))
-		for k, v := range finding.Details {
-			fmt.Fprintf(w, "      %s %s\n",
-				colorize(k+":", colorCyan, color),
-				v)
+	fmt.Fprintln(w, colorize("  扫描完成。", colorBoldGreen, color))
+
+	if result.OpenClawInfo != nil && result.OpenClawInfo.Installed {
+		fmt.Fprintln(w, colorize(separator, colorGray, color))
+		fmt.Fprintf(w, "  OpenClaw 版本: %s\n", result.OpenClawInfo.Version)
+		if result.AuditResult != nil {
+			var critical, warn, info int
+			for _, f := range result.AuditResult.Findings {
+				switch f.Severity {
+				case "critical":
+					critical++
+				case "warn":
+					warn++
+				case "info":
+					info++
+				}
+			}
+			critStr := colorize(fmt.Sprintf("%d 严重", critical), colorBoldRed, color)
+			warnStr := colorize(fmt.Sprintf("%d 警告", warn), colorBoldYellow, color)
+			infoStr := colorize(fmt.Sprintf("%d 提示", info), colorBoldBlue, color)
+			fmt.Fprintf(w, "  审计结果:  %s  %s  %s\n", critStr, warnStr, infoStr)
 		}
-		if finding.Remediation != "" {
-			fmt.Fprintf(w, "      %s %s\n",
-				colorize("治理:", colorBoldGreen, color),
-				finding.Remediation)
-		}
-		fmt.Fprintln(w)
+		fmt.Fprintln(w, colorize(separator, colorGray, color))
 	}
-
-	counts := result.CountBySeverity()
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, colorize(separator, colorGray, color))
-
-	critical := colorize(fmt.Sprintf("%d 严重", counts[models.Critical]), colorBoldRed, color)
-	warning := colorize(fmt.Sprintf("%d 警告", counts[models.Warning]), colorBoldYellow, color)
-	info := colorize(fmt.Sprintf("%d 提示", counts[models.Info]), colorBoldBlue, color)
-	fmt.Fprintf(w, "  扫描结果:  %s  %s  %s\n", critical, warning, info)
-
-	fmt.Fprintln(w, colorize(separator, colorGray, color))
 }
 
 func printIssues(w io.Writer, result *models.ScanResult, color bool) {
@@ -321,17 +271,4 @@ func hasDesktopEnvironment() bool {
 	return strings.EqualFold(
 		strings.TrimSpace(os.Getenv("OS")), "Windows_NT") ||
 		os.Getenv("TERM_PROGRAM") != ""
-}
-
-func severityStyle(severity models.Severity) (icon string, tagColor string) {
-	switch severity {
-	case models.Critical:
-		return "\033[31m●\033[0m", colorBoldRed
-	case models.Warning:
-		return "\033[33m▲\033[0m", colorBoldYellow
-	case models.Info:
-		return "\033[34m■\033[0m", colorBoldBlue
-	default:
-		return "\033[32m✔\033[0m", colorBoldGreen
-	}
 }

@@ -32,6 +32,8 @@ vendor/
 .env
 .env.*
 *.local
+mise.toml
 
 # ── 系统 ──────────────────────────────────────────
 Thumbs.db
+wt.txt

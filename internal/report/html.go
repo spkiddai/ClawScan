@@ -14,18 +14,6 @@ import (
 var templateFS embed.FS
 
 var funcMap = template.FuncMap{
-	"severityClass": func(s models.Severity) string {
-		switch s {
-		case models.Critical:
-			return "critical"
-		case models.Warning:
-			return "warning"
-		case models.Info:
-			return "info"
-		default:
-			return "clean"
-		}
-	},
 	"joinStrings": func(s []string) string {
 		return strings.Join(s, ", ")
 	},

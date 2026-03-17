@@ -222,21 +222,21 @@ body {
 <body>
 <div class="page">
 
-  <!-- Header：只保留标题 + 版本 -->
+  <!-- Header -->
   <div class="report-header">
     <h1>{{.ProductName}} 安全审计报告</h1>
     <div class="subtitle">OpenClaw 运行环境安全分析</div>
     <span class="version">v{{.Version}}</span>
   </div>
 
-  <!-- 风险统计 -->
+  <!-- 风险统计（来自 audit 结果） -->
   <div class="summary-bar">
     <div class="summary-card critical">
       <div class="num">{{.CriticalCount}}</div>
       <div class="desc"><div class="label">严重风险</div><div class="hint">Critical</div></div>
     </div>
     <div class="summary-card warn">
-      <div class="num">{{.WarningCount}}</div>
+      <div class="num">{{.WarnCount}}</div>
       <div class="desc"><div class="label">警告风险</div><div class="hint">Warn</div></div>
     </div>
     <div class="summary-card info">
@@ -273,7 +273,7 @@ body {
     </div>
   </div>
 
-  <!-- 2. OpenClaw 信息（始终显示，未安装时展示本地残留） -->
+  <!-- 2. OpenClaw 信息 -->
   <div class="section">
     <div class="section-header">
       <div class="icon icon-openclaw">⚙️</div>
@@ -284,8 +284,62 @@ body {
       <div class="not-installed-notice">
         ⚠️ 未检测到 OpenClaw 配置文件（openclaw.json），以下为本地路径扫描结果。
       </div><br>
-      {{end}}
       <div class="info-grid">
+        {{if .OpenClawInfo.HomeDir}}
+        <div class="info-field">
+          <div class="field-label">主目录</div>
+          <div class="field-value">
+            {{.OpenClawInfo.HomeDir}}<br>
+            {{if .OpenClawInfo.HomeExists}}<span class="exists-yes">✓ 目录存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
+          </div>
+        </div>
+        {{end}}
+        {{if .OpenClawInfo.ConfigPath}}
+        <div class="info-field">
+          <div class="field-label">配置文件</div>
+          <div class="field-value">
+            {{.OpenClawInfo.ConfigPath}}<br>
+            {{if .OpenClawInfo.ConfigExists}}<span class="exists-yes">✓ 文件存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
+          </div>
+        </div>
+        {{end}}
+        {{if .OpenClawInfo.Workspace}}
+        <div class="info-field">
+          <div class="field-label">工作目录</div>
+          <div class="field-value">
+            {{.OpenClawInfo.Workspace}}<br>
+            {{if .OpenClawInfo.WorkspaceExists}}<span class="exists-yes">✓ 目录存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
+          </div>
+        </div>
+        {{end}}
+        {{if .OpenClawInfo.AgentsDir}}
+        <div class="info-field">
+          <div class="field-label">Agent 会话目录</div>
+          <div class="field-value">
+            {{.OpenClawInfo.AgentsDir}}<br>
+            <span class="exists-yes">会话数: {{.OpenClawInfo.AgentSessionCount}}</span>
+          </div>
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="info-grid">
+        <div class="info-field">
+          <div class="field-label">OpenClaw 版本</div>
+          <div class="field-value">{{if .OpenClawInfo.Version}}{{.OpenClawInfo.Version}}{{else}}—{{end}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">网关 IP</div>
+          <div class="field-value">{{.OpenClawInfo.IP}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">端口</div>
+          <div class="field-value">{{.OpenClawInfo.Port}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">监听模式（Bind）</div>
+          <div class="field-value">{{if .OpenClawInfo.Bind}}{{.OpenClawInfo.Bind}}{{else}}—{{end}}</div>
+        </div>
         <div class="info-field">
           <div class="field-label">主目录</div>
           <div class="field-value">
@@ -300,6 +354,7 @@ body {
             {{if .OpenClawInfo.ConfigExists}}<span class="exists-yes">✓ 文件存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
           </div>
         </div>
+        {{if .OpenClawInfo.Workspace}}
         <div class="info-field">
           <div class="field-label">工作目录</div>
           <div class="field-value">
@@ -307,25 +362,16 @@ body {
             {{if .OpenClawInfo.WorkspaceExists}}<span class="exists-yes">✓ 目录存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
           </div>
         </div>
-        {{if .OpenClawInfo.Installed}}
-        <div class="info-field">
-          <div class="field-label">OpenClaw 版本</div>
-          <div class="field-value">{{if .OpenClawInfo.Version}}{{.OpenClawInfo.Version}}{{else}}—{{end}}</div>
-        </div>
-        <div class="info-field">
-          <div class="field-label">网关 IP</div>
-          <div class="field-value">{{.OpenClawInfo.IP}}</div>
-        </div>
-        <div class="info-field">
-          <div class="field-label">端口</div>
-          <div class="field-value">{{.OpenClawInfo.Port}}</div>
-        </div>
-        <div class="info-field">
-          <div class="field-label">监听地址</div>
-          <div class="field-value">{{if .OpenClawInfo.Bind}}{{.OpenClawInfo.Bind}}{{else}}—{{end}}</div>
-        </div>
         {{end}}
+        <div class="info-field">
+          <div class="field-label">Agent 会话目录</div>
+          <div class="field-value">
+            {{.OpenClawInfo.AgentsDir}}<br>
+            <span class="exists-yes">会话数: {{.OpenClawInfo.AgentSessionCount}}</span>
+          </div>
+        </div>
       </div>
+      {{end}}
     </div>
   </div>
 

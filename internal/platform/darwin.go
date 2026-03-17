@@ -3,8 +3,6 @@
 package platform
 
 import (
-	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,41 +27,6 @@ func (p *darwinPlatform) OpenClawHome() string {
 	// Fallback to current user's home directory
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".openclaw")
-}
-
-func (p *darwinPlatform) FindProcesses() ([]ProcessInfo, error) {
-	return FindProcesses()
-}
-
-func (p *darwinPlatform) FindServices() ([]ServiceInfo, error) {
-	var services []ServiceInfo
-	var issue error
-
-	// Check systemd LaunchDaemons
-	plistPaths := []string{
-		"/Library/LaunchDaemons/ai.openclaw.gateway.plist",
-	}
-	// Check user LaunchAgents
-	homeDirs := findAllUserHomeDirs()
-	for _, home := range homeDirs {
-		plistPaths = append(plistPaths,
-			filepath.Join(home, "Library/LaunchAgents/ai.openclaw.gateway.plist"),
-		)
-	}
-
-	for _, path := range plistPaths {
-		if _, err := os.Stat(path); err == nil {
-			name := strings.TrimSuffix(filepath.Base(path), ".plist")
-			active := false
-			if out, err := exec.Command("launchctl", "list").Output(); err == nil {
-				active = strings.Contains(string(out), name)
-			} else {
-				issue = errors.Join(issue, fmt.Errorf("launchctl list: %w", err))
-			}
-			services = append(services, ServiceInfo{Name: name, Active: active})
-		}
-	}
-	return services, issue
 }
 
 func (p *darwinPlatform) OpenBrowser(url string) error {

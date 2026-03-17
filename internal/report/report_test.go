@@ -15,18 +15,9 @@ func TestWriteHTMLIncludesGroupedFindingsAndIssues(t *testing.T) {
 		OS:       "linux",
 		Arch:     "amd64",
 		ScanTime: time.Date(2026, 3, 15, 10, 30, 0, 0, time.UTC),
-		Findings: []models.Finding{
-			{
-				Category:    models.CatConfig,
-				Title:       "Shell 访问已启用",
-				Description: "危险配置",
-				Severity:    models.Critical,
-			},
-		},
 		Issues: []models.ScanIssue{
 			{Check: "services", Error: "launchctl 不可用"},
 		},
-		MaxSeverity: models.Critical,
 	}
 
 	var output bytes.Buffer
