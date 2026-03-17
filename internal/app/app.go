@@ -121,6 +121,8 @@ func runScan(plat platform.Platform, openclawHome string) *models.ScanResult {
 		}
 	}
 
+	result.NodeVersion, result.NPMVersion = collector.CollectNodeVersions()
+
 	info, channels, models := collector.CollectOpenClawInfo(homeDir)
 	result.OpenClawInfo = info
 	result.Channels = channels

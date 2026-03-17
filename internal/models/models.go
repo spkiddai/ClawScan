@@ -21,10 +21,13 @@ type OpenClawInfo struct {
 	Version           string `json:"version,omitempty"`
 	HomeDir           string `json:"home_dir,omitempty"`
 	HomeExists        bool   `json:"home_exists"`
+	HomeDirPerm       string `json:"home_dir_perm,omitempty"`
 	ConfigPath        string `json:"config_path,omitempty"`
 	ConfigExists      bool   `json:"config_exists"`
-	Workspace         string `json:"workspace,omitempty"`
-	WorkspaceExists   bool   `json:"workspace_exists"`
+	ConfigPerm        string `json:"config_perm,omitempty"`
+	Running           bool   `json:"running"`
+	AuthMode          string `json:"auth_mode,omitempty"`
+	AuthToken         string `json:"auth_token,omitempty"`
 	AgentsDir         string `json:"agents_dir,omitempty"`
 	AgentSessionCount int    `json:"agent_session_count,omitempty"`
 	IP                string `json:"ip,omitempty"`
@@ -58,8 +61,9 @@ type AuditFinding struct {
 
 // AttackSurface represents an entry in the attack surface analysis.
 type AttackSurface struct {
-	Item   string `json:"item"`
-	Status string `json:"status"`
+	Item        string `json:"item"`
+	Status      string `json:"status"`
+	StatusClass string `json:"status_class,omitempty"` // "red", "yellow", "green"
 }
 
 // AuditResult holds the complete output of openclaw security audit.
@@ -74,6 +78,8 @@ type ScanResult struct {
 	OS           string          `json:"os"`
 	Arch         string          `json:"arch"`
 	ScanTime     time.Time       `json:"scan_time"`
+	NodeVersion  string          `json:"node_version,omitempty"`
+	NPMVersion   string          `json:"npm_version,omitempty"`
 	Issues       []ScanIssue     `json:"issues,omitempty"`
 	OpenClawInfo *OpenClawInfo   `json:"openclaw_info,omitempty"`
 	Channels     []Channel       `json:"channels,omitempty"`

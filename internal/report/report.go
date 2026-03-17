@@ -1,8 +1,10 @@
 package report
 
 import (
+	"cmp"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/spkiddai/clawscan/internal/models"
@@ -74,6 +76,16 @@ func NewTemplateData(result *models.ScanResult, version string) *TemplateData {
 				data.RiskFindings = append(data.RiskFindings, f)
 			}
 		}
+		// Sort: critical first, then warn
+		slices.SortStableFunc(data.RiskFindings, func(a, b models.AuditFinding) int {
+			order := func(s string) int {
+				if s == "critical" {
+					return 0
+				}
+				return 1
+			}
+			return cmp.Compare(order(a.Severity), order(b.Severity))
+		})
 	}
 
 	return data

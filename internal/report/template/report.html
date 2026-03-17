@@ -200,6 +200,49 @@ body {
   padding: 24px;
 }
 
+/* ── Attack surface status colors ── */
+.as-red    { color: #dc2626; font-weight: 600; }
+.as-yellow { color: #d97706; font-weight: 600; }
+.as-green  { color: #16a34a; font-weight: 600; }
+
+/* ── Finding cards ── */
+.finding-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.finding-card:last-child { margin-bottom: 0; }
+.finding-card.finding-critical { border-left: 4px solid #dc2626; }
+.finding-card.finding-warn     { border-left: 4px solid #ea580c; }
+.finding-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #fafafa;
+  border-bottom: 1px solid #f3f4f6;
+  flex-wrap: wrap;
+}
+.finding-check { font-size: 12px; color: #6b7280; font-family: monospace; }
+.finding-title { font-size: 14px; font-weight: 600; color: #111827; }
+.finding-body  { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.finding-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.finding-section-text {
+  font-size: 13px;
+  color: #374151;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
 /* ── Audit unavailable ── */
 .audit-notice {
   padding: 14px 18px;
@@ -262,12 +305,12 @@ body {
           <div class="field-value">{{.Result.OS}}</div>
         </div>
         <div class="info-field">
-          <div class="field-label">CPU 架构</div>
-          <div class="field-value">{{.Result.Arch}}</div>
+          <div class="field-label">Node 版本</div>
+          <div class="field-value">{{if .Result.NodeVersion}}{{.Result.NodeVersion}}{{else}}无{{end}}</div>
         </div>
         <div class="info-field">
-          <div class="field-label">扫描时间</div>
-          <div class="field-value">{{.Result.ScanTime.Format "2006-01-02 15:04:05"}}</div>
+          <div class="field-label">NPM 版本</div>
+          <div class="field-value">{{if .Result.NPMVersion}}{{.Result.NPMVersion}}{{else}}无{{end}}</div>
         </div>
       </div>
     </div>
@@ -281,56 +324,54 @@ body {
     </div>
     <div class="section-body">
       {{if not .OpenClawInfo.Installed}}
-      <div class="not-installed-notice">
-        ⚠️ 未检测到 OpenClaw 配置文件（openclaw.json），以下为本地路径扫描结果。
-      </div><br>
+      <div class="not-installed-notice" style="margin-bottom:16px;">OpenClaw 未安装</div>
       <div class="info-grid">
         {{if .OpenClawInfo.HomeDir}}
         <div class="info-field">
           <div class="field-label">主目录</div>
-          <div class="field-value">
-            {{.OpenClawInfo.HomeDir}}<br>
-            {{if .OpenClawInfo.HomeExists}}<span class="exists-yes">✓ 目录存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
-          </div>
+          <div class="field-value">{{if .OpenClawInfo.HomeExists}}{{.OpenClawInfo.HomeDir}}{{else}}不存在{{end}}</div>
         </div>
+        {{if .OpenClawInfo.HomeDirPerm}}
+        <div class="info-field">
+          <div class="field-label">主目录权限</div>
+          <div class="field-value">{{if eq .OpenClawInfo.HomeDirPerm "700"}}<span class="as-green">{{.OpenClawInfo.HomeDirPerm}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.HomeDirPerm}}</span>{{end}}</div>
+        </div>
+        {{end}}
         {{end}}
         {{if .OpenClawInfo.ConfigPath}}
         <div class="info-field">
           <div class="field-label">配置文件</div>
-          <div class="field-value">
-            {{.OpenClawInfo.ConfigPath}}<br>
-            {{if .OpenClawInfo.ConfigExists}}<span class="exists-yes">✓ 文件存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
-          </div>
+          <div class="field-value">{{if .OpenClawInfo.ConfigExists}}{{.OpenClawInfo.ConfigPath}}{{else}}不存在{{end}}</div>
+        </div>
+        {{if .OpenClawInfo.ConfigPerm}}
+        <div class="info-field">
+          <div class="field-label">配置文件权限</div>
+          <div class="field-value">{{if eq .OpenClawInfo.ConfigPerm "600"}}<span class="as-green">{{.OpenClawInfo.ConfigPerm}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.ConfigPerm}}</span>{{end}}</div>
         </div>
         {{end}}
-        {{if .OpenClawInfo.Workspace}}
-        <div class="info-field">
-          <div class="field-label">工作目录</div>
-          <div class="field-value">
-            {{.OpenClawInfo.Workspace}}<br>
-            {{if .OpenClawInfo.WorkspaceExists}}<span class="exists-yes">✓ 目录存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
-          </div>
-        </div>
         {{end}}
         {{if .OpenClawInfo.AgentsDir}}
         <div class="info-field">
           <div class="field-label">Agent 会话目录</div>
-          <div class="field-value">
-            {{.OpenClawInfo.AgentsDir}}<br>
-            <span class="exists-yes">会话数: {{.OpenClawInfo.AgentSessionCount}}</span>
-          </div>
+          <div class="field-value">{{if .OpenClawInfo.AgentsDir}}{{.OpenClawInfo.AgentsDir}}{{else}}不存在{{end}}<br>会话数: {{.OpenClawInfo.AgentSessionCount}}</div>
         </div>
         {{end}}
       </div>
       {{else}}
       <div class="info-grid">
         <div class="info-field">
+          <div class="field-label">运行状态</div>
+          <div class="field-value">
+            {{if .OpenClawInfo.Running}}<span class="badge badge-on">已启动</span>{{else}}<span class="badge badge-off">未启动</span>{{end}}
+          </div>
+        </div>
+        <div class="info-field">
           <div class="field-label">OpenClaw 版本</div>
           <div class="field-value">{{if .OpenClawInfo.Version}}{{.OpenClawInfo.Version}}{{else}}—{{end}}</div>
         </div>
         <div class="info-field">
           <div class="field-label">网关 IP</div>
-          <div class="field-value">{{.OpenClawInfo.IP}}</div>
+          <div class="field-value">{{if or (eq .OpenClawInfo.IP "127.0.0.1") (eq .OpenClawInfo.IP "::1")}}<span class="as-green">{{.OpenClawInfo.IP}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.IP}}</span>{{end}}</div>
         </div>
         <div class="info-field">
           <div class="field-label">端口</div>
@@ -338,37 +379,39 @@ body {
         </div>
         <div class="info-field">
           <div class="field-label">监听模式（Bind）</div>
-          <div class="field-value">{{if .OpenClawInfo.Bind}}{{.OpenClawInfo.Bind}}{{else}}—{{end}}</div>
+          <div class="field-value">{{if .OpenClawInfo.Bind}}{{if eq .OpenClawInfo.Bind "loopback"}}<span class="as-green">{{.OpenClawInfo.Bind}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.Bind}}</span>{{end}}{{else}}—{{end}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">网关认证方式</div>
+          <div class="field-value">{{if .OpenClawInfo.AuthMode}}{{if eq .OpenClawInfo.AuthMode "token"}}<span class="as-green">{{.OpenClawInfo.AuthMode}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.AuthMode}}</span>{{end}}{{else}}—{{end}}</div>
+        </div>
+        <div class="info-field">
+          <div class="field-label">网关认证 Token</div>
+          <div class="field-value">{{if .OpenClawInfo.AuthToken}}{{.OpenClawInfo.AuthToken}}{{else}}—{{end}}</div>
         </div>
         <div class="info-field">
           <div class="field-label">主目录</div>
-          <div class="field-value">
-            {{.OpenClawInfo.HomeDir}}<br>
-            {{if .OpenClawInfo.HomeExists}}<span class="exists-yes">✓ 目录存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
-          </div>
+          <div class="field-value">{{if .OpenClawInfo.HomeExists}}{{.OpenClawInfo.HomeDir}}{{else}}不存在{{end}}</div>
         </div>
+        {{if .OpenClawInfo.HomeDirPerm}}
+        <div class="info-field">
+          <div class="field-label">主目录权限</div>
+          <div class="field-value">{{if eq .OpenClawInfo.HomeDirPerm "700"}}<span class="as-green">{{.OpenClawInfo.HomeDirPerm}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.HomeDirPerm}}</span>{{end}}</div>
+        </div>
+        {{end}}
         <div class="info-field">
           <div class="field-label">配置文件</div>
-          <div class="field-value">
-            {{.OpenClawInfo.ConfigPath}}<br>
-            {{if .OpenClawInfo.ConfigExists}}<span class="exists-yes">✓ 文件存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
-          </div>
+          <div class="field-value">{{if .OpenClawInfo.ConfigExists}}{{.OpenClawInfo.ConfigPath}}{{else}}不存在{{end}}</div>
         </div>
-        {{if .OpenClawInfo.Workspace}}
+        {{if .OpenClawInfo.ConfigPerm}}
         <div class="info-field">
-          <div class="field-label">工作目录</div>
-          <div class="field-value">
-            {{.OpenClawInfo.Workspace}}<br>
-            {{if .OpenClawInfo.WorkspaceExists}}<span class="exists-yes">✓ 目录存在</span>{{else}}<span class="exists-no">✗ 不存在</span>{{end}}
-          </div>
+          <div class="field-label">配置文件权限</div>
+          <div class="field-value">{{if eq .OpenClawInfo.ConfigPerm "600"}}<span class="as-green">{{.OpenClawInfo.ConfigPerm}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.ConfigPerm}}</span>{{end}}</div>
         </div>
         {{end}}
         <div class="info-field">
           <div class="field-label">Agent 会话目录</div>
-          <div class="field-value">
-            {{.OpenClawInfo.AgentsDir}}<br>
-            <span class="exists-yes">会话数: {{.OpenClawInfo.AgentSessionCount}}</span>
-          </div>
+          <div class="field-value">{{if .OpenClawInfo.AgentsDir}}{{.OpenClawInfo.AgentsDir}}{{else}}不存在{{end}}<br>会话数: {{.OpenClawInfo.AgentSessionCount}}</div>
         </div>
       </div>
       {{end}}
@@ -451,7 +494,10 @@ body {
       <tbody>
         {{if .AttackSurfaces}}
           {{range .AttackSurfaces}}
-          <tr><td>{{.Item}}</td><td>{{.Status}}</td></tr>
+          <tr>
+            <td>{{.Item}}</td>
+            <td>{{if .StatusClass}}<span class="as-{{.StatusClass}}">{{.Status}}</span>{{else}}{{.Status}}{{end}}</td>
+          </tr>
           {{end}}
         {{else}}
           <tr class="empty-row"><td colspan="2">无攻击面数据</td></tr>
@@ -472,30 +518,40 @@ body {
       <div class="audit-notice">⚠️ 审计命令未执行或输出解析失败，风险数据不可用。</div>
     </div>
     {{else}}
-    <table class="data-table">
-      <thead>
-        <tr><th>等级</th><th>检查项</th><th>标题</th><th>描述</th><th>修复建议</th></tr>
-      </thead>
-      <tbody>
-        {{if .RiskFindings}}
-          {{range .RiskFindings}}
-          <tr class="row-{{.Severity}}">
-            <td><span class="sev sev-{{.Severity}}">{{.Severity}}</span></td>
-            <td>{{.CheckID}}</td>
-            <td>{{.Title}}</td>
-            <td>{{.Detail}}</td>
-            <td>{{.Remediation}}</td>
-          </tr>
-          {{end}}
-        {{else}}
-          <tr class="empty-row"><td colspan="5">未发现 critical / warn 级风险项</td></tr>
+    <div class="section-body">
+      {{if .RiskFindings}}
+        {{range .RiskFindings}}
+        <div class="finding-card finding-{{.Severity}}">
+          <div class="finding-header">
+            {{if eq .Severity "critical"}}<span class="sev sev-critical">严重</span>{{else}}<span class="sev sev-warn">风险</span>{{end}}
+            <span class="finding-check">{{.CheckID}}</span>
+            <span class="finding-title">{{.Title}}</span>
+          </div>
+          <div class="finding-body">
+            {{if .Detail}}
+            <div>
+              <div class="finding-section-label">描述</div>
+              <div class="finding-section-text">{{.Detail}}</div>
+            </div>
+            {{end}}
+            {{if .Remediation}}
+            <div>
+              <div class="finding-section-label">修复建议</div>
+              <div class="finding-section-text">{{.Remediation}}</div>
+            </div>
+            {{end}}
+          </div>
+        </div>
         {{end}}
-      </tbody>
-    </table>
+      {{else}}
+        <div class="not-installed-notice">未发现严重 / 风险级风险项</div>
+      {{end}}
+    </div>
     {{end}}
   </div>
 
   {{else}}
+  {{if and (not .OpenClawInfo.Running) (not .OpenClawInfo.HomeExists)}}
   <!-- OpenClaw 未安装，跳过后续区块 -->
   <div class="section">
     <div class="section-body">
@@ -504,6 +560,7 @@ body {
       </div>
     </div>
   </div>
+  {{end}}
   {{end}}
 
   <div class="report-footer">

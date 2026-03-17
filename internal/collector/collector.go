@@ -2,13 +2,38 @@ package collector
 
 import (
 	"encoding/json"
+	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/spkiddai/clawscan/internal/models"
 )
+
+const gatewayPort = 18789
+
+// permString returns the octal permission string (e.g. "700") for a path, or "" on error.
+func permString(path string) string {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%o", fi.Mode().Perm())
+}
+
+func isRunning() bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", gatewayPort), 2*time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
 
 type extendedOpenClawConfig struct {
 	Version string `json:"version"`
@@ -16,18 +41,45 @@ type extendedOpenClawConfig struct {
 		IP   string `json:"ip"`
 		Port uint16 `json:"port"`
 		Bind string `json:"bind"`
+		Auth struct {
+			Mode  string `json:"mode"`
+			Token string `json:"token"`
+		} `json:"auth"`
 	} `json:"gateway"`
-	Channels []struct {
-		Name             string   `json:"name"`
+	Channels map[string]struct {
 		Enabled          bool     `json:"enabled"`
 		PrivateAllowlist []string `json:"private_allowlist"`
 		GroupAllowlist   []string `json:"group_allowlist"`
 	} `json:"channels"`
-	Models []struct {
-		Provider string   `json:"provider"`
-		BaseURL  string   `json:"base_url"`
-		Models   []string `json:"models"`
+	Models struct {
+		Providers map[string]struct {
+			BaseURL string `json:"baseUrl"`
+			Models  []struct {
+				ID string `json:"id"`
+			} `json:"models"`
+		} `json:"providers"`
 	} `json:"models"`
+}
+
+// CollectNodeVersions returns the installed Node.js and npm version strings.
+// Returns empty strings when not installed.
+func CollectNodeVersions() (nodeVer, npmVer string) {
+	if out, err := exec.Command("node", "--version").Output(); err == nil {
+		nodeVer = strings.TrimSpace(string(out))
+	}
+	if out, err := exec.Command("npm", "--version").Output(); err == nil {
+		npmVer = strings.TrimSpace(string(out))
+	}
+	return
+}
+
+// isOpenClawNpmInstalled checks whether openclaw is installed as a global npm package.
+func isOpenClawNpmInstalled() bool {
+	out, err := exec.Command("npm", "list", "-g", "openclaw", "--depth=0").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), "openclaw@")
 }
 
 // openclawVersion tries to get the OpenClaw version string.
@@ -41,6 +93,24 @@ func openclawVersion(fromConfig string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// openclawStatusIP tries to obtain the gateway IP from `openclaw status` output.
+var reStatusURL = regexp.MustCompile(`(?:wss?|https?)://(\d+\.\d+\.\d+\.\d+):\d+`)
+var reStatusIP = regexp.MustCompile(`\b(\d+\.\d+\.\d+\.\d+):\d+`)
+
+func openclawStatusIP() string {
+	out, err := exec.Command("openclaw", "status").Output()
+	if err != nil {
+		return ""
+	}
+	if m := reStatusURL.FindSubmatch(out); len(m) > 1 {
+		return string(m[1])
+	}
+	if m := reStatusIP.FindSubmatch(out); len(m) > 1 {
+		return string(m[1])
+	}
+	return ""
 }
 
 // CollectOpenClawInfo returns OpenClawInfo, channels, and model providers.
@@ -59,15 +129,12 @@ func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel
 		if s, err := os.Stat(homeDir); err == nil && s.IsDir() {
 			info.HomeExists = true
 			info.HomeDir = homeDir
+			info.HomeDirPerm = permString(homeDir)
 		}
 		if _, err := os.Stat(configPath); err == nil {
 			info.ConfigExists = true
 			info.ConfigPath = configPath
-		}
-		workspacePath := filepath.Join(homeDir, "workspace")
-		if s, err := os.Stat(workspacePath); err == nil && s.IsDir() {
-			info.WorkspaceExists = true
-			info.Workspace = workspacePath
+			info.ConfigPerm = permString(configPath)
 		}
 		agentsDir := filepath.Join(homeDir, "agents")
 		if _, err := os.Stat(agentsDir); err == nil {
@@ -75,6 +142,12 @@ func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel
 			matches, _ := filepath.Glob(filepath.Join(agentsDir, "*/sessions"))
 			info.AgentSessionCount = len(matches)
 		}
+		// npm fallback: openclaw may be installed as a global npm package
+		if isOpenClawNpmInstalled() {
+			info.Installed = true
+			info.Version = openclawVersion("")
+		}
+		info.Running = isRunning()
 		return info, nil, nil
 	}
 
@@ -84,20 +157,23 @@ func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel
 		if s, err := os.Stat(homeDir); err == nil && s.IsDir() {
 			info.HomeExists = true
 			info.HomeDir = homeDir
+			info.HomeDirPerm = permString(homeDir)
 		}
 		info.ConfigExists = true
 		info.ConfigPath = configPath
-		workspacePath := filepath.Join(homeDir, "workspace")
-		if s, err := os.Stat(workspacePath); err == nil && s.IsDir() {
-			info.WorkspaceExists = true
-			info.Workspace = workspacePath
-		}
+		info.ConfigPerm = permString(configPath)
 		agentsDir := filepath.Join(homeDir, "agents")
 		if _, err := os.Stat(agentsDir); err == nil {
 			info.AgentsDir = agentsDir
 			matches, _ := filepath.Glob(filepath.Join(agentsDir, "*/sessions"))
 			info.AgentSessionCount = len(matches)
 		}
+		// npm fallback: openclaw may be installed as a global npm package
+		if isOpenClawNpmInstalled() {
+			info.Installed = true
+			info.Version = openclawVersion("")
+		}
+		info.Running = isRunning()
 		return info, nil, nil
 	}
 
@@ -106,21 +182,35 @@ func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel
 	info.Version = openclawVersion(config.Version)
 	info.IP = config.Gateway.IP
 	if info.IP == "" {
-		info.IP = "127.0.0.1"
+		// Fallback: try to get IP from openclaw status output
+		if ip := openclawStatusIP(); ip != "" {
+			info.IP = ip
+		} else {
+			info.IP = "127.0.0.1"
+		}
 	}
 	info.Port = config.Gateway.Port
 	info.Bind = config.Gateway.Bind
+	info.AuthMode = config.Gateway.Auth.Mode
+	// Compute token display value
+	if config.Gateway.Auth.Mode != "token" {
+		info.AuthToken = "无"
+	} else {
+		token := config.Gateway.Auth.Token
+		if token == "" || strings.HasPrefix(token, "$") || strings.Contains(token, "$(") {
+			info.AuthToken = "环境变量"
+		} else {
+			info.AuthToken = "****"
+		}
+	}
 
 	// Set all path fields (they exist since config was read)
 	info.HomeDir = homeDir
 	info.HomeExists = true
+	info.HomeDirPerm = permString(homeDir)
 	info.ConfigPath = configPath
 	info.ConfigExists = true
-	workspacePath := filepath.Join(homeDir, "workspace")
-	if s, err := os.Stat(workspacePath); err == nil && s.IsDir() {
-		info.WorkspaceExists = true
-		info.Workspace = workspacePath
-	}
+	info.ConfigPerm = permString(configPath)
 
 	// Agent sessions
 	agentsDir := filepath.Join(homeDir, "agents")
@@ -129,9 +219,17 @@ func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel
 		matches, _ := filepath.Glob(filepath.Join(agentsDir, "*/sessions"))
 		info.AgentSessionCount = len(matches)
 	}
+	info.Running = isRunning()
 
+	// Channels: map of channel name → config
 	var channels []models.Channel
-	for _, ch := range config.Channels {
+	chNames := make([]string, 0, len(config.Channels))
+	for name := range config.Channels {
+		chNames = append(chNames, name)
+	}
+	sort.Strings(chNames)
+	for _, name := range chNames {
+		ch := config.Channels[name]
 		private := ch.PrivateAllowlist
 		if private == nil {
 			private = []string{}
@@ -141,23 +239,35 @@ func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel
 			group = []string{}
 		}
 		channels = append(channels, models.Channel{
-			Name:             ch.Name,
+			Name:             name,
 			Enabled:          ch.Enabled,
 			PrivateAllowlist: private,
 			GroupAllowlist:   group,
 		})
 	}
 
+	// Models: models.providers map
 	var modelProviders []models.ModelProvider
-	for _, m := range config.Models {
-		mods := m.Models
-		if mods == nil {
-			mods = []string{}
+	providerNames := make([]string, 0, len(config.Models.Providers))
+	for name := range config.Models.Providers {
+		providerNames = append(providerNames, name)
+	}
+	sort.Strings(providerNames)
+	for _, name := range providerNames {
+		p := config.Models.Providers[name]
+		var modelIDs []string
+		for _, m := range p.Models {
+			if m.ID != "" {
+				modelIDs = append(modelIDs, m.ID)
+			}
+		}
+		if modelIDs == nil {
+			modelIDs = []string{}
 		}
 		modelProviders = append(modelProviders, models.ModelProvider{
-			Provider: m.Provider,
-			BaseURL:  m.BaseURL,
-			Models:   mods,
+			Provider: name,
+			BaseURL:  p.BaseURL,
+			Models:   modelIDs,
 		})
 	}
 

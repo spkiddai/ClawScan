@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/spkiddai/clawscan/internal/models"
 )
 
 type rawAuditOutput struct {
-	Summary struct {
-		AttackSurface map[string]interface{} `json:"attack_surface"`
-	} `json:"summary"`
 	Findings []struct {
 		CheckID     string `json:"checkId"`
 		Severity    string `json:"severity"`
@@ -22,15 +22,78 @@ type rawAuditOutput struct {
 	} `json:"findings"`
 }
 
-var attackSurfaceKeys = []struct {
-	jsonKey string
-	label   string
-}{
-	{"tools_elevated", "提权工具"},
-	{"hooks_webhooks", "Webhook 钩子"},
-	{"hooks_internal", "内部钩子"},
-	{"browser_control", "浏览器控制"},
-	{"trust_model", "信任模型"},
+var reGroupOpen     = regexp.MustCompile(`open=(\d+)`)
+var reGroupAllowlist = regexp.MustCompile(`allowlist=(\d+)`)
+
+// parseAttackSurface converts a raw key/value line into one or more AttackSurface entries
+// with Chinese labels and risk-level color classes.
+func parseAttackSurface(rawKey, rawValue string) []models.AttackSurface {
+	key := strings.ToLower(strings.TrimSpace(rawKey))
+	value := strings.TrimSpace(rawValue)
+
+	switch key {
+	case "groups":
+		openNum := 0
+		if m := reGroupOpen.FindStringSubmatch(value); len(m) > 1 {
+			openNum, _ = strconv.Atoi(m[1])
+		}
+		openClass := "green"
+		if openNum > 0 {
+			openClass = "red"
+		}
+
+		allowNum := 0
+		if m := reGroupAllowlist.FindStringSubmatch(value); len(m) > 1 {
+			allowNum, _ = strconv.Atoi(m[1])
+		}
+		allowClass := "green"
+		if allowNum > 0 {
+			allowClass = "yellow"
+		}
+
+		return []models.AttackSurface{
+			{Item: "群组（开放）", Status: strconv.Itoa(openNum), StatusClass: openClass},
+			{Item: "群组（白名单）", Status: strconv.Itoa(allowNum), StatusClass: allowClass},
+		}
+
+	case "tools.elevated":
+		class, display := "green", "未启用"
+		if value == "enabled" {
+			class, display = "red", "启用"
+		}
+		return []models.AttackSurface{{Item: "高权限工具", Status: display, StatusClass: class}}
+
+	case "hooks.webhooks":
+		class, display := "green", "未启用"
+		if value == "enabled" {
+			class, display = "red", "启用"
+		}
+		return []models.AttackSurface{{Item: "外部Hooks", Status: display, StatusClass: class}}
+
+	case "hooks.internal":
+		class, display := "green", "未启用"
+		if value == "enabled" {
+			class, display = "yellow", "启用"
+		}
+		return []models.AttackSurface{{Item: "内部Hook", Status: display, StatusClass: class}}
+
+	case "browser control":
+		class, display := "green", "未启用"
+		if value == "enabled" {
+			class, display = "yellow", "启用"
+		}
+		return []models.AttackSurface{{Item: "浏览器", Status: display, StatusClass: class}}
+
+	case "trust model":
+		display := value
+		if strings.Contains(value, "personal assistant") {
+			display = "个人助手模式"
+		}
+		return []models.AttackSurface{{Item: "信任模型", Status: display}}
+
+	default:
+		return []models.AttackSurface{{Item: rawKey, Status: value}}
+	}
 }
 
 // RunAudit executes `openclaw security audit --deep --json` and returns the parsed result.
@@ -54,23 +117,25 @@ func RunAudit() (*models.AuditResult, error) {
 	result := &models.AuditResult{}
 
 	for _, f := range raw.Findings {
+		if f.CheckID == "summary.attack_surface" {
+			for _, line := range strings.Split(f.Detail, "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				parts := strings.SplitN(line, ":", 2)
+				if len(parts) == 2 {
+					result.AttackSurfaces = append(result.AttackSurfaces, parseAttackSurface(parts[0], parts[1])...)
+				}
+			}
+			continue
+		}
 		result.Findings = append(result.Findings, models.AuditFinding{
 			CheckID:     f.CheckID,
 			Severity:    f.Severity,
 			Title:       f.Title,
 			Detail:      f.Detail,
 			Remediation: f.Remediation,
-		})
-	}
-
-	for _, k := range attackSurfaceKeys {
-		status := "未检测"
-		if v, ok := raw.Summary.AttackSurface[k.jsonKey]; ok && v != nil {
-			status = fmt.Sprintf("%v", v)
-		}
-		result.AttackSurfaces = append(result.AttackSurfaces, models.AttackSurface{
-			Item:   k.label,
-			Status: status,
 		})
 	}
 
