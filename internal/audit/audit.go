@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -40,8 +41,13 @@ func RunAudit() (*models.AuditResult, error) {
 		return nil, fmt.Errorf("openclaw security audit 执行失败: %w", err)
 	}
 
+	start := bytes.IndexByte(out, '{')
+	if start == -1 {
+		return nil, fmt.Errorf("解析 audit 输出失败: 输出中未找到 JSON 内容")
+	}
+
 	var raw rawAuditOutput
-	if err := json.Unmarshal(out, &raw); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(out[start:])).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("解析 audit 输出失败: %w", err)
 	}
 
