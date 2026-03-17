@@ -381,11 +381,11 @@ body {
         </div>
         <div class="info-field">
           <div class="field-label">网关 IP</div>
-          <div class="field-value">{{if or (eq .OpenClawInfo.IP "127.0.0.1") (eq .OpenClawInfo.IP "::1")}}<span class="as-green">{{.OpenClawInfo.IP}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.IP}}</span>{{end}}</div>
+          <div class="field-value">{{if .OpenClawInfo.IP}}{{if or (eq .OpenClawInfo.IP "127.0.0.1") (eq .OpenClawInfo.IP "::1")}}<span class="as-green">{{.OpenClawInfo.IP}}</span>{{else}}<span class="as-yellow">{{.OpenClawInfo.IP}}</span>{{end}}{{else}}—{{end}}</div>
         </div>
         <div class="info-field">
           <div class="field-label">端口</div>
-          <div class="field-value">{{.OpenClawInfo.Port}}</div>
+          <div class="field-value">{{if .OpenClawInfo.Port}}{{.OpenClawInfo.Port}}{{else}}—{{end}}</div>
         </div>
         <div class="info-field">
           <div class="field-label">监听模式</div>

@@ -2,6 +2,7 @@ package audit
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spkiddai/clawscan/internal/models"
 )
@@ -107,7 +109,9 @@ func parseAttackSurface(rawKey, rawValue string) []models.AttackSurface {
 // RunAudit executes `openclaw security audit --deep --json` and returns the parsed result.
 // If openclaw is not installed or the command fails, it returns nil and an error.
 func RunAudit() (*models.AuditResult, error) {
-	out, err := exec.Command("openclaw", "security", "audit", "--deep", "--json").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "openclaw", "security", "audit", "--deep", "--json").Output()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) {

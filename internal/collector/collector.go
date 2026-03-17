@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spkiddai/clawscan/internal/models"
 )
@@ -25,14 +27,42 @@ func permString(path string) string {
 	return fmt.Sprintf("%o", fi.Mode().Perm())
 }
 
+const (
+	cmdTimeout      = 15 * time.Second // general openclaw commands
+	cmdTimeoutQuick = 5 * time.Second  // fast system commands (which, pgrep, node --version)
+)
+
+// cmdOutputWithTimeout runs a command with the given timeout and returns stdout.
+// Non-zero exit codes are tolerated (output is still returned).
+func cmdOutputWithTimeout(timeout time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, name, args...).Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return out, nil
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+// cmdOutput runs a command with the default timeout and returns stdout.
+func cmdOutput(name string, args ...string) ([]byte, error) {
+	return cmdOutputWithTimeout(cmdTimeout, name, args...)
+}
+
 // isRunning checks whether the openclaw process is currently running.
 func isRunning() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeoutQuick)
+	defer cancel()
 	switch runtime.GOOS {
 	case "windows":
-		out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq openclaw.exe", "/NH").Output()
+		out, err := exec.CommandContext(ctx, "tasklist", "/FI", "IMAGENAME eq openclaw.exe", "/NH").Output()
 		return err == nil && strings.Contains(string(out), "openclaw.exe")
 	default:
-		return exec.Command("pgrep", "-f", "openclaw").Run() == nil
+		return exec.CommandContext(ctx, "pgrep", "-f", "openclaw").Run() == nil
 	}
 }
 
@@ -76,18 +106,7 @@ func firstContentLine(out []byte) string {
 	return ""
 }
 
-// cmdOutput runs a command and returns its stdout, tolerating non-zero exit codes.
-func cmdOutput(name string, args ...string) ([]byte, error) {
-	out, err := exec.Command(name, args...).Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return out, nil
-		}
-		return nil, err
-	}
-	return out, nil
-}
+
 
 type extendedOpenClawConfig struct {
 	Version string `json:"version"`
@@ -121,10 +140,10 @@ type extendedOpenClawConfig struct {
 // CollectNodeVersions returns the installed Node.js and npm version strings.
 // Returns empty strings when not installed.
 func CollectNodeVersions() (nodeVer, npmVer string) {
-	if out, err := exec.Command("node", "--version").Output(); err == nil {
+	if out, err := cmdOutputWithTimeout(cmdTimeoutQuick, "node", "--version"); err == nil {
 		nodeVer = strings.TrimSpace(string(out))
 	}
-	if out, err := exec.Command("npm", "--version").Output(); err == nil {
+	if out, err := cmdOutputWithTimeout(cmdTimeoutQuick, "npm", "--version"); err == nil {
 		npmVer = strings.TrimSpace(string(out))
 	}
 	return
@@ -132,7 +151,7 @@ func CollectNodeVersions() (nodeVer, npmVer string) {
 
 // isOpenClawNpmInstalled checks whether openclaw is installed as a global npm package.
 func isOpenClawNpmInstalled() bool {
-	out, err := exec.Command("npm", "list", "-g", "openclaw", "--depth=0").Output()
+	out, err := cmdOutputWithTimeout(cmdTimeout, "npm", "list", "-g", "openclaw", "--depth=0")
 	if err != nil {
 		return false
 	}
@@ -141,11 +160,13 @@ func isOpenClawNpmInstalled() bool {
 
 // isOpenClawBinaryInstalled checks whether the openclaw binary is on PATH.
 func isOpenClawBinaryInstalled() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeoutQuick)
+	defer cancel()
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("where", "openclaw")
+		cmd = exec.CommandContext(ctx, "where", "openclaw")
 	} else {
-		cmd = exec.Command("which", "openclaw")
+		cmd = exec.CommandContext(ctx, "which", "openclaw")
 	}
 	return cmd.Run() == nil
 }
@@ -191,22 +212,6 @@ func openclawStatusGateway() (ip string, port uint16) {
 	return "", 0
 }
 
-// openclawConfigFilePath runs `openclaw config file` and returns the first line
-// that ends with ".json" (trailing spaces and tabs stripped, newlines respected).
-func openclawConfigFilePath() string {
-	out, err := cmdOutput("openclaw", "config", "file")
-	if err != nil || len(out) == 0 {
-		return ""
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimRight(line, " \t")
-		if strings.HasSuffix(line, ".json") {
-			return line
-		}
-	}
-	return ""
-}
-
 // CollectOpenClawInfo returns OpenClawInfo, channels, and model providers.
 func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel, []models.ModelProvider) {
 	info := &models.OpenClawInfo{}
@@ -242,14 +247,8 @@ func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel
 	// Step 2: Check running status
 	info.Running = isRunning()
 
-	// Step 3: Determine config file path.
-	// When installed and running, use `openclaw config file` for accuracy.
+	// Step 3: Config file path
 	configPath := filepath.Join(homeDir, "openclaw.json")
-	if info.Running {
-		if p := openclawConfigFilePath(); p != "" {
-			configPath = p
-		}
-	}
 
 	// Step 4: Populate home + config path fields
 	if s, err := os.Stat(homeDir); err == nil && s.IsDir() {
@@ -293,17 +292,11 @@ func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel
 	if info.Running && (info.IP == "" || info.Port == 0) {
 		statusIP, statusPort := openclawStatusGateway()
 		if info.IP == "" {
-			if statusIP != "" {
-				info.IP = statusIP
-			} else {
-				info.IP = "127.0.0.1"
-			}
+			info.IP = statusIP
 		}
 		if info.Port == 0 {
 			info.Port = statusPort
 		}
-	} else if info.IP == "" {
-		info.IP = "127.0.0.1"
 	}
 	info.AuthMode = config.Gateway.Auth.Mode
 
