@@ -583,17 +583,6 @@ body {
     {{end}}
   </div>
 
-  {{else}}
-  {{if and (not .OpenClawInfo.Running) (not .OpenClawInfo.HomeExists)}}
-  <!-- OpenClaw 未安装，跳过后续区块 -->
-  <div class="section">
-    <div class="section-body">
-      <div class="not-installed-notice">
-        OpenClaw 未安装
-      </div>
-    </div>
-  </div>
-  {{end}}
   {{end}}
 
   <div class="report-footer">

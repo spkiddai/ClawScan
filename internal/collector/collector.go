@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spkiddai/clawscan/internal/models"
@@ -170,31 +171,40 @@ func openclawVersion(fromConfig string) string {
 	return firstContentLine(out)
 }
 
-// openclawStatusIP tries to obtain the gateway IP from `openclaw status` output.
-var reStatusURL = regexp.MustCompile(`(?:wss?|https?)://(\d+\.\d+\.\d+\.\d+):\d+`)
-var reStatusIP = regexp.MustCompile(`\b(\d+\.\d+\.\d+\.\d+):\d+`)
+// openclawStatusGateway tries to obtain the gateway IP and port from `openclaw status` output.
+var reStatusURL = regexp.MustCompile(`(?:wss?|https?)://(\d+\.\d+\.\d+\.\d+):(\d+)`)
+var reStatusIP = regexp.MustCompile(`\b(\d+\.\d+\.\d+\.\d+):(\d+)`)
 
-func openclawStatusIP() string {
+func openclawStatusGateway() (ip string, port uint16) {
 	out, err := cmdOutput("openclaw", "status")
 	if err != nil || len(out) == 0 {
-		return ""
+		return "", 0
 	}
-	if m := reStatusURL.FindSubmatch(out); len(m) > 1 {
-		return string(m[1])
+	if m := reStatusURL.FindSubmatch(out); len(m) > 2 {
+		p, _ := strconv.ParseUint(string(m[2]), 10, 16)
+		return string(m[1]), uint16(p)
 	}
-	if m := reStatusIP.FindSubmatch(out); len(m) > 1 {
-		return string(m[1])
+	if m := reStatusIP.FindSubmatch(out); len(m) > 2 {
+		p, _ := strconv.ParseUint(string(m[2]), 10, 16)
+		return string(m[1]), uint16(p)
 	}
-	return ""
+	return "", 0
 }
 
-// openclawConfigFilePath runs `openclaw config file` to get the actual config file path.
+// openclawConfigFilePath runs `openclaw config file` and returns the first line
+// that ends with ".json" (trailing spaces and tabs stripped, newlines respected).
 func openclawConfigFilePath() string {
 	out, err := cmdOutput("openclaw", "config", "file")
 	if err != nil || len(out) == 0 {
 		return ""
 	}
-	return firstContentLine(out)
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimRight(line, " \t")
+		if strings.HasSuffix(line, ".json") {
+			return line
+		}
+	}
+	return ""
 }
 
 // CollectOpenClawInfo returns OpenClawInfo, channels, and model providers.
@@ -276,15 +286,25 @@ func CollectOpenClawInfo(homeDir string) (*models.OpenClawInfo, []models.Channel
 	}
 
 	info.IP = envDisplay(config.Gateway.IP)
-	if info.IP == "" {
-		if ip := openclawStatusIP(); ip != "" {
-			info.IP = ip
-		} else {
-			info.IP = "127.0.0.1"
-		}
-	}
 	info.Port = config.Gateway.Port
 	info.Bind = envDisplay(config.Gateway.Bind)
+
+	// When running and IP or Port is missing from config, query `openclaw status`
+	if info.Running && (info.IP == "" || info.Port == 0) {
+		statusIP, statusPort := openclawStatusGateway()
+		if info.IP == "" {
+			if statusIP != "" {
+				info.IP = statusIP
+			} else {
+				info.IP = "127.0.0.1"
+			}
+		}
+		if info.Port == 0 {
+			info.Port = statusPort
+		}
+	} else if info.IP == "" {
+		info.IP = "127.0.0.1"
+	}
 	info.AuthMode = config.Gateway.Auth.Mode
 
 	// Channels
