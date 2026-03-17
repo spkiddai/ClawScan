@@ -94,13 +94,6 @@ func parseAttackSurface(rawKey, rawValue string) []models.AttackSurface {
 		}
 		return []models.AttackSurface{{Item: "浏览器", Status: display, StatusClass: class}}
 
-	case "trust model":
-		display := value
-		if strings.Contains(value, "personal assistant") {
-			display = "个人助手模式"
-		}
-		return []models.AttackSurface{{Item: "信任模型", Status: display}}
-
 	default:
 		return []models.AttackSurface{{Item: rawKey, Status: value}}
 	}
